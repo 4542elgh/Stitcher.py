@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+from tkinter.filedialog import asksaveasfile
 from PIL import Image, ImageTk
 from datetime import datetime
 import os
@@ -29,7 +30,7 @@ class Stitcher():
         # Keep track a list of ImageMeta objects
         self.meta_list = []
 
-        for image in self.image_list:
+        for (idx,image) in enumerate(self.image_list):
             # Calculate scale ratio, we need all images to be of same width, and height adjust automatically
             ratio = self.max_width/image["img"].size[0]
 
@@ -49,21 +50,28 @@ class Stitcher():
                        from_ = 1,
                        to = image["img"].size[1],
                        orient = tk.HORIZONTAL,
-                       command = lambda value, name=image["filename"], label_obj=label, position="top", offset=meta_obj: self.adjust(value, name, label_obj, position, offset))
+                       command = lambda value, name=image["filename"], label_obj=label, position="top", offset=meta_obj: self.adjust(value, name, label_obj, position, offset)).grid(row=idx+1,column=3, padx=(0,30))
 
             sc2 = ttk.Scale(self.root,
                        from_ = 1,
                        to = image["img"].size[1],
                        orient = tk.HORIZONTAL,
-                       command = lambda value, name=image["filename"], label_obj=label, position="bottom", meta=meta_obj: self.adjust(value, name, label_obj, position, meta))
+                       command = lambda value, name=image["filename"], label_obj=label, position="bottom", meta=meta_obj: self.adjust(value, name, label_obj, position, meta)).grid(row=idx+1,column=5, padx=(0,30))
 
-            sc1.pack()
-            sc2.pack()
+            tk.Label(self.root, text='Image ' + str(idx+1) + ' Top').grid(row=idx+1,column=2)
+            # sc1.pack(side=tk.LEFT,pady=15)
+            tk.Label(self.root, text='Bottom').grid(row=idx+1,column=4)
+            # sc2.pack(side=tk.LEFT,pady=15)
 
         save_btn = ttk.Button(self.root, text ="Save", command = lambda: self.save())
+        save_btn.grid(row=len(self.image_list)+2,column=2, pady=(10,0))
 
-        save_btn.pack()
-        self.container.pack()
+        save_as_btn = ttk.Button(self.root, text ="Save As", command = lambda ask=True: self.save(ask))
+        save_as_btn.grid(row=len(self.image_list)+3,column=2, pady=(10,0))
+
+        # self.container.pack()
+        # self.container.grid(row=len(self.image_list)+2,column=5, rowspan=999)
+        self.container.grid(row=0,column=0, rowspan=999)
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
 
@@ -73,7 +81,7 @@ class Stitcher():
     def find_images(self):
         image_list = []
         for file_name in os.listdir():
-            if file_name.split(".")[1] != "py":
+            if file_name.split(".")[1].lower() == "png" or file_name.split(".")[1].lower() == "jpg":
                 image_list.append({"filename":file_name, "img":Image.open(os.path.join(os.getcwd(), file_name)).convert('RGB')})
         return image_list
 
@@ -107,18 +115,24 @@ class Stitcher():
         label_obj.image = img
     
     # Saving based on ImageMeta's cropped image object
-    def save(self):
+    def save(self, ask=False):
         total_height = self.find_cropped_heights_sum()
         # Create a large enough canvas
         new_im = Image.new('RGB', (self.max_width, total_height))
 
+        filename = 'stitch_' + datetime.now().strftime("%Y%m%d%H%M%S") + '.png'
+        if ask: 
+            f = asksaveasfile(initialfile = filename,
+                              defaultextension=".png",
+                              filetypes=[("All Files","*.*"),("JPEG","*.jpg"),("PNG","*.png")])
+            filename = f.name
         y_offset = 0
         for im in self.meta_list:
             # Append images and record offset
             new_im.paste(im.cropped, (0,y_offset))
             y_offset += im.cropped.size[1]
-
-        new_im.save('stitch_' + datetime.now().strftime("%Y%m%d%H%M%S") + '.jpg')
+        
+        new_im.save(filename)
 
 # Helper class to store each image offset and PIL image data
 class ImageMeta:
