@@ -1,6 +1,9 @@
-Extrememly barebone image stitcher
+# Extrememly barebone image stitcher
 
-It will list all images (by name) in current directory, scale (base on a ratio of `max_width`/`current_image width`) and align them vertically.
-Use the slider to adjust gap so it appear to be one long image without extra border.
+## Stitched image UI
+Adding horizontal trim to make images align is also a good idea
+![Screenshot 2023-01-21 185721](https://user-images.githubusercontent.com/17227723/213898535-313be94b-cc5f-4c89-8eb7-7fbaf1242a97.png)
+
+It will list all images (by name) in current directory, scale (base on a ratio of `max_width`/`current_image width`) and user can use slider to align images vertically.
 
 This project is made so I do not have to go to my phone to stitch photos
