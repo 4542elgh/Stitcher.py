@@ -3,13 +3,14 @@ from tkinter import ttk
 from tkinter.filedialog import asksaveasfile
 from PIL import Image, ImageTk
 from datetime import datetime
+import math
 import os
 
 class Stitcher():
     def __init__(self):
         # Some initial setup
-        self.image_list = self.find_images()
-        self.max_width = self.find_max_width()
+        self.meta_list = self.find_images()
+        self.max_width = self.find_max_width(list(map(lambda x:x.orig_img, self.meta_list)))
 
         # IDK what is going on, but thank god we have stackoverflow
         self.root = tk.Tk()
@@ -27,50 +28,37 @@ class Stitcher():
             )
         )
 
-        # Keep track a list of ImageMeta objects
-        self.meta_list = []
-
-        for (idx,image) in enumerate(self.image_list):
+        for (idx,meta) in enumerate(self.meta_list):
             # Calculate scale ratio, we need all images to be of same width, and height adjust automatically
-            ratio = self.max_width/image["img"].size[0]
+            ratio = self.max_width/meta.orig_img.size[0]
 
             # Open image and convert to tk image object
-            resized_img = image["img"].resize((int(image["img"].size[0]*ratio),int(image["img"].size[1]*ratio)), Image.LANCZOS)
+            resized_img = meta.orig_img.resize((int(meta.orig_img.size[0]*ratio),int(meta.orig_img.size[1]*ratio)), Image.LANCZOS)
 
             img = ImageTk.PhotoImage(resized_img)
             label = ttk.Label(self.scrollable_frame, image=img)
             label.image = img
             label.pack()
 
-            meta_obj = ImageMeta(0, 0, resized_img)
-            self.meta_list.append(meta_obj)
+            meta.label = label
 
-            # Callback need to be in lambda function
-            sc1 = ttk.Scale(self.root,
-                       from_ = 1,
-                       to = image["img"].size[1],
-                       orient = tk.HORIZONTAL,
-                       command = lambda value, name=image["filename"], label_obj=label, position="top", offset=meta_obj: self.adjust(value, name, label_obj, position, offset)).grid(row=idx+1,column=3, padx=(0,30))
+            self.tkscale(meta, idx, "top", 1)
+            self.tkscale(meta, idx, "bottom", 1)
+            self.tkscale(meta, idx, "left", 2)
+            self.tkscale(meta, idx, "right", 2)
 
-            sc2 = ttk.Scale(self.root,
-                       from_ = 1,
-                       to = image["img"].size[1],
-                       orient = tk.HORIZONTAL,
-                       command = lambda value, name=image["filename"], label_obj=label, position="bottom", meta=meta_obj: self.adjust(value, name, label_obj, position, meta)).grid(row=idx+1,column=5, padx=(0,30))
-
-            tk.Label(self.root, text='Image ' + str(idx+1) + ' Top').grid(row=idx+1,column=2)
-            # sc1.pack(side=tk.LEFT,pady=15)
-            tk.Label(self.root, text='Bottom').grid(row=idx+1,column=4)
-            # sc2.pack(side=tk.LEFT,pady=15)
+            tk.Label(self.root, text='Image ' + str(idx+1) + ":").grid(row=(3*idx),column=2)
+            tk.Label(self.root, text='Top').grid(row=(3*idx)+1,column=2, pady=(0,10))
+            tk.Label(self.root, text='Bottom').grid(row=(3*idx)+1,column=4, pady=(0,10))
+            tk.Label(self.root, text='Left').grid(row=(3*idx)+2,column=2, pady=(0,10))
+            tk.Label(self.root, text='Right').grid(row=(3*idx)+2,column=4, pady=(0,10))
 
         save_btn = ttk.Button(self.root, text ="Save", command = lambda: self.save())
-        save_btn.grid(row=len(self.image_list)+2,column=2, pady=(10,0))
+        save_btn.grid(row=(3*len(self.meta_list))+2,column=2, pady=(10,0))
 
         save_as_btn = ttk.Button(self.root, text ="Save As", command = lambda ask=True: self.save(ask))
-        save_as_btn.grid(row=len(self.image_list)+3,column=2, pady=(10,0))
+        save_as_btn.grid(row=(3*len(self.meta_list))+3,column=2, pady=(10,0))
 
-        # self.container.pack()
-        # self.container.grid(row=len(self.image_list)+2,column=5, rowspan=999)
         self.container.grid(row=0,column=0, rowspan=999)
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
@@ -79,15 +67,15 @@ class Stitcher():
 
     # Give me a list of images and their filename
     def find_images(self):
-        image_list = []
+        meta_list = []
         for file_name in os.listdir():
             if file_name.split(".")[1].lower() == "png" or file_name.split(".")[1].lower() == "jpg":
-                image_list.append({"filename":file_name, "img":Image.open(os.path.join(os.getcwd(), file_name)).convert('RGB')})
-        return image_list
+                meta_list.append(ImageMeta(0, 0, 0, 0, Image.open(os.path.join(os.getcwd(), file_name)).convert('RGB'), file_name))
+        return meta_list
 
     # Give me the max width so I can create a ratio for scaling up/down
-    def find_max_width(self):
-        widths, _ = zip(*(i["img"].size for i in self.image_list))
+    def find_max_width(self, image_list):
+        widths, _ = zip(*(i.size for i in image_list))
         return max(widths)
 
     # Give me end result canvas total height
@@ -96,27 +84,44 @@ class Stitcher():
         return sum(heights)
 
     # Manipulate original image, with slider value, and save end result into cropped property
-    def adjust(self, val, img_name, label_obj, position, meta):
+    def adjust(self, val, position, meta):
         img_size = meta.orig_img.size
+        val = math.floor(float(val))
 
         # If cropping bottom
         if position == "bottom":
             # im.crop((left, top, right, bottom))
-            cropped_img = meta.orig_img.crop((0,meta.offset_top,img_size[0],int(img_size[1]-float(val))))
-            meta.offset_bottom = float(val)
-        else:
-            cropped_img = meta.orig_img.crop((0,float(val),img_size[0],img_size[1]-meta.offset_bottom))
-            meta.offset_top = float(val)
+            cropped_img = meta.orig_img.crop(( meta.offset_left, meta.offset_top, img_size[0]-meta.offset_right, img_size[1]-val))
+            meta.offset_bottom = val
 
-        # Set the label with new image
+        elif position == "top":
+            cropped_img = meta.orig_img.crop(( meta.offset_left, val, img_size[0]-meta.offset_right, img_size[1]-meta.offset_bottom))
+            meta.offset_top = val
+
+        elif position == "left":
+            cropped_img = meta.orig_img.crop(( val, meta.offset_top, img_size[0]-meta.offset_right, img_size[1]-meta.offset_bottom))
+            meta.offset_left = val
+
+        else:
+            cropped_img = meta.orig_img.crop(( meta.offset_left, meta.offset_top, img_size[0]-val, img_size[1]-meta.offset_bottom))
+            meta.offset_right = val
+
+        if position == "left" or position == "right":
+            self.max_width = self.find_max_width(list(map(lambda x:x.cropped, self.meta_list)))
+            ratio = self.max_width/cropped_img.size[0]
+
+            # Open image and convert to tk image object
+            cropped_img = cropped_img.resize((int(cropped_img.size[0]*ratio),int(cropped_img.size[1]*ratio)), Image.LANCZOS)
+
         img = ImageTk.PhotoImage(cropped_img)
         meta.cropped = cropped_img
-        label_obj.configure(image=img)
-        label_obj.image = img
+        meta.label.configure(image=img)
+        meta.label.image = img
     
     # Saving based on ImageMeta's cropped image object
     def save(self, ask=False):
         total_height = self.find_cropped_heights_sum()
+
         # Create a large enough canvas
         new_im = Image.new('RGB', (self.max_width, total_height))
 
@@ -128,19 +133,35 @@ class Stitcher():
             filename = f.name
         y_offset = 0
         for im in self.meta_list:
+            # center image if its smaller than max width, this shouldnt be necessay if you press the scale button
+            center_x = int((self.max_width-im.cropped.size[0])/2)
             # Append images and record offset
-            new_im.paste(im.cropped, (0,y_offset))
+            new_im.paste(im.cropped, (center_x,y_offset))
             y_offset += im.cropped.size[1]
-        
         new_im.save(filename)
+    
+    def tkscale(self, meta, idx, pos, grid):
+        col = (3 if pos == "bottom" or pos == "left" else 5)
+        ttk.Scale(
+            self.root,
+            from_ = 1,
+            to = meta.cropped.size[grid%2],
+            orient = tk.HORIZONTAL,
+            length = 200,
+            command = lambda value, position=pos, offset=meta: self.adjust(value, position, offset)
+        ).grid(row=(3*idx)+grid, column=col, padx=(0,30), pady=(0,10))
 
 # Helper class to store each image offset and PIL image data
 class ImageMeta:
-    def __init__(self, offset_top, offset_bottom, img):
+    def __init__(self, offset_top, offset_bottom, offset_left, offset_right, img, filename):
         self.offset_top = offset_top
         self.offset_bottom = offset_bottom
+        self.offset_left = offset_left
+        self.offset_right = offset_right
         self.orig_img = img
         self.cropped = img
+        self.label = None
+        self.filename = filename
         
 if __name__ == "__main__":
     Stitcher()
