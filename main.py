@@ -141,7 +141,7 @@ class Stitcher():
         new_im.save(filename)
     
     def tkscale(self, meta, idx, pos, grid):
-        col = (3 if pos == "bottom" or pos == "left" else 5)
+        col = (3 if pos == "bottom" or pos == "right" else 5)
         ttk.Scale(
             self.root,
             from_ = 1,
